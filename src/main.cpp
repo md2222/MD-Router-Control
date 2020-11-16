@@ -24,7 +24,7 @@
 
 using namespace std;
 
-
+char* appTitle = "MD Router Control";
 string appDir;
 string confPath;
 
@@ -32,7 +32,7 @@ GtkStatusIcon *tray;
 
 string servAddr;
 string user;
-string passw;
+//string passw;
 string testAddr;
 
 
@@ -224,53 +224,40 @@ void WebView::show()
 
 //----------------------------------------------------------------------------------------------------------------------
 
-static void onStorePasswCb(GnomeKeyringResult res, gpointer user_data)
-{
-    if (res == GNOME_KEYRING_RESULT_OK)
-        g_print("Password saved\n");
-    else
-        g_print("Save password error: %s", gnome_keyring_result_to_message(res));
-}
-
-
 static void savePassw(const gchar* passw)
 {
-    gnome_keyring_store_password (GNOME_KEYRING_NETWORK_PASSWORD, /* The password type */
-                                  GNOME_KEYRING_DEFAULT,          /* Where to save it */
-                                  "Password wallet",       /* Password description, displayed to user */
-                                  passw,                 /* The password itself */
-                                  onStorePasswCb,                /* A function called when complete */
-                                  NULL, NULL,                     /* User data for callback, and destroy notify */
-                                  "user", "MD Router Control",
-                                  "server", "gnome.org",
-                                  NULL);
+    GnomeKeyringResult result = gnome_keyring_store_password_sync(
+                GNOME_KEYRING_NETWORK_PASSWORD,
+                GNOME_KEYRING_DEFAULT,
+                "Password wallet",
+                passw,
+                "user", "MD Router Control",
+                "server", "gnome.org",
+                NULL);
+
+    if (result == GNOME_KEYRING_RESULT_OK)
+        g_print("Password saved\n");
+    else
+        g_print("Save password error: %s", gnome_keyring_result_to_message(result));
 }
 
 
-static void onFoundPasswCb(GnomeKeyringResult res, const gchar* password, gpointer user_data)
+void findPassw(gchar **passw)
 {
-    /* user_data will be the same as was passed to gnome_keyring_find_password() */
-    if (res == GNOME_KEYRING_RESULT_OK)
+    GnomeKeyringResult result = gnome_keyring_find_password_sync(
+                GNOME_KEYRING_NETWORK_PASSWORD,
+                passw,
+                "user", "MD Router Control",
+                "server", "gnome.org",
+                NULL);
+
+    if (result != GNOME_KEYRING_RESULT_OK)
     {
-        //g_print ("Password found: %s\n", password);
-        g_print ("Password found\n");
-        passw = password;
+        g_print("Couldn't find password: %s", gnome_keyring_result_to_message(result));
+        //passw = "";
     }
     else
-        g_print("Couldn't find password: %s", gnome_keyring_result_to_message(res));
-
-    /* Once this function returns |password| will be freed */
-}
-
-
-static void findPassw()
-{
-    gnome_keyring_find_password (GNOME_KEYRING_NETWORK_PASSWORD,  /* The password type */
-                                 onFoundPasswCb,                  /* A function called when complete */
-                                 NULL, NULL,                      /* User data for callback, and destroy notify */
-                                 "user", "MD Router Control",
-                                 "server", "gnome.org",
-                                 NULL);
+        g_print ("Password found\n");
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -283,7 +270,7 @@ public:
     GtkWidget  *window;
     string* servAddr;
     string* user;
-    string* passw;
+    gchar* passw;
     string* testAddr;
     PrefDialog(GtkWidget *parent, const char* uiDir)
     {
@@ -368,7 +355,8 @@ void PrefDialog::show()
 {
     gtk_entry_set_text(edAddr, servAddr->data());
     gtk_entry_set_text(edUser, user->data());
-    gtk_entry_set_text(edPassw, passw->data());
+    if (passw)
+        gtk_entry_set_text(edPassw, passw);
     gtk_entry_set_text(edTestAddr, testAddr->data());
 
     gtk_widget_show_all(window);
@@ -397,10 +385,16 @@ void PrefDialog::onOk()
     if (text)  user->assign(text);
 
     text = gtk_entry_get_text(edPassw);
-    if (text && passw->compare(text))
+    //if (text && passw->compare(text))
+    if (text)
     {
-        passw->assign(text);
-        savePassw(text);
+        //passw->assign(text);
+        if (!passw || strcmp(text, passw))
+            savePassw(text);
+
+        gchar *zero = g_strnfill(strlen(text), '*');
+        gtk_entry_set_text(edPassw, zero);
+        g_free(zero);
     }
 
     text = gtk_entry_get_text(edTestAddr);
@@ -537,9 +531,22 @@ static void onRouter()
         winRouter->show();
     else
     {
-        string url = "http://" + user + ":" + passw + "@" + servAddr;
-        //printf("onRouter:   url=%s\n", url.data());
-        winRouter->loadUrl(url.data());
+        gchar* passw = NULL;
+        findPassw(&passw);
+        if (!passw)
+        {
+            printf("onRouter:   Couldn't find password in keyring.\n");
+            MessageBox(NULL, "Couldn't find password in keyring.", appTitle);
+            return;
+        }
+
+        gchar *url = g_strconcat("http://", user.data(), ":", passw, "@", servAddr.data(), NULL);
+        printf("onRouter:   url=%s\n", url);
+        gnome_keyring_free_password(passw);
+
+        winRouter->loadUrl(url);
+
+        gnome_keyring_free_password(url);
     }
 }
 
@@ -552,11 +559,17 @@ static void onOptions()
         pref->setRect(&prefDlgRect);
         pref->servAddr = &servAddr;
         pref->user = &user;
-        pref->passw = &passw;
+        //pref->passw = passw;
         pref->testAddr = &testAddr;
     }
 
+    gchar* passw = NULL;
+    findPassw(&passw);
+    pref->passw = passw;
+
     pref->show();
+
+    gnome_keyring_free_password(passw);
 }
 
 
@@ -807,7 +820,7 @@ int main(int argc, char **argv)
     }
 
 
-    findPassw();
+    //findPassw();
 
     g_idle_add(httpPingLater, NULL);
 
