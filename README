@@ -1,0 +1,4 @@
+MD Router Control
+
+Opens your router's web interface by one click on the tray icon. The password is stored in gnome keyring. After closing the interface window, checks connection to the test address and changes tray icon color.
+Based on webkit2gtk.
