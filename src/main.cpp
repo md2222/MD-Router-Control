@@ -385,10 +385,8 @@ void PrefDialog::onOk()
     if (text)  user->assign(text);
 
     text = gtk_entry_get_text(edPassw);
-    //if (text && passw->compare(text))
     if (text)
     {
-        //passw->assign(text);
         if (!passw || strcmp(text, passw))
             savePassw(text);
 
@@ -541,7 +539,7 @@ static void onRouter()
         }
 
         gchar *url = g_strconcat("http://", user.data(), ":", passw, "@", servAddr.data(), NULL);
-        printf("onRouter:   url=%s\n", url);
+        //printf("onRouter:   url=%s\n", url);
         gnome_keyring_free_password(passw);
 
         winRouter->loadUrl(url);
@@ -734,11 +732,6 @@ int main(int argc, char **argv)
         appDir = buf;
     }
 
-    //gchar *currDir = g_get_current_dir();  // bad when run from desktop
-    //char *currDir = get_current_dir_name();
-    //printf("currDir=%s\n", currDir);
-    //appDir = currDir;
-
     //const gchar *configDir = g_get_user_config_dir();
     //printf("configDir=%s\n", configDir);
     // g_get_home_dir ()
@@ -746,7 +739,6 @@ int main(int argc, char **argv)
     printf("appDir=%s\n", appDir.data());
 
     gchar *baseName = g_path_get_basename(argv[0]);
-    //printf("baseName=%s\n", baseName);
 
     confPath = appDir + baseName + ".conf";
     printf("confPath=%s\n", confPath.data());
@@ -819,8 +811,6 @@ int main(int argc, char **argv)
         testAddr = ini.getValue("public", "testAddr", "");
     }
 
-
-    //findPassw();
 
     g_idle_add(httpPingLater, NULL);
 
