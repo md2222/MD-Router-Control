@@ -57,32 +57,6 @@ struct Point
 bool httpPing(const char* addr);
 gboolean httpPingLater(gpointer data);
 
-struct FilePath
-{
-    string dir;
-    string name;
-    string ext;
-    void set(const string path)
-    {
-        dir.clear();  name.clear();  ext.clear();  
-        std::size_t pos1 = path.find_last_of("/");  
-        if (pos1 != string::npos)  dir = path.substr(0, pos1); 
-        else  pos1 = 0;
-        
-        //printf("pos1=%d\n", pos1);
-        int pos2 = path.find_last_of(".");
-        //printf("pos2=%d\n", pos2);
-        if (pos2 != string::npos && pos2 > pos1) 
-        {
-             name = path.substr(pos1 + 1, pos2 - pos1 - 1);
-             ext = path.substr(pos2 + 1);
-        }
-        else
-            name = path.substr(pos1 + 1);
-    }
-    const string get()  {  return dir + "/" + name + "." + ext;  }
-};
-
 //----------------------------------------------------------------------------------------------------------------------
 // https://developer.gnome.org/gtk3/stable/GtkDialog.html#GtkDialogFlags
 
@@ -733,7 +707,7 @@ bool httpPing(const char* addr)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 0.0.1        15.11.2020\n");
+    printf("MD Router Control 0.0.2        16.11.2020\n");
 
     int bufSize = 256;
     char buf[256] = { 0 };
@@ -747,12 +721,21 @@ int main(int argc, char **argv)
         appDir = buf;
     }
 
+    //gchar *currDir = g_get_current_dir();  // bad when run from desktop
+    //char *currDir = get_current_dir_name();
+    //printf("currDir=%s\n", currDir);
+    //appDir = currDir;
+
+    //const gchar *configDir = g_get_user_config_dir();
+    //printf("configDir=%s\n", configDir);
+    // g_get_home_dir ()
+
     printf("appDir=%s\n", appDir.data());
 
-    FilePath path;
-    path.set(argv[0]);
+    gchar *baseName = g_path_get_basename(argv[0]);
+    //printf("baseName=%s\n", baseName);
 
-    confPath = appDir + path.name + ".conf";
+    confPath = appDir + baseName + ".conf";
     printf("confPath=%s\n", confPath.data());
 
     gtk_init (&argc, &argv);
@@ -788,7 +771,7 @@ int main(int argc, char **argv)
 
     winRouter = new WebView();
 
-    string iconPath = appDir + "icons/" + path.name + ".png";
+    string iconPath = appDir + "icons/" + baseName + ".png";
     winRouter->setIcon(iconPath.data());
 
 
