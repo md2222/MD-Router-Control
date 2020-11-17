@@ -226,19 +226,37 @@ void WebView::show()
 
 static void savePassw(const gchar* passw)
 {
-    GnomeKeyringResult result = gnome_keyring_store_password_sync(
-                GNOME_KEYRING_NETWORK_PASSWORD,
-                GNOME_KEYRING_DEFAULT,
-                "Password wallet",
-                passw,
-                "user", "MD Router Control",
-                "server", "gnome.org",
-                NULL);
+    if (!passw)
+        g_print("Password pointer is NULL\n");
+    else if (strlen(passw) > 0)
+    {
+        GnomeKeyringResult result = gnome_keyring_store_password_sync(
+                    GNOME_KEYRING_NETWORK_PASSWORD,
+                    GNOME_KEYRING_DEFAULT,
+                    "MD Router Control",
+                    passw,
+                    "user", "MD Router Control",
+                    "server", "gnome.org",
+                    NULL);
 
-    if (result == GNOME_KEYRING_RESULT_OK)
-        g_print("Password saved\n");
+        if (result == GNOME_KEYRING_RESULT_OK)
+            g_print("Password saved\n");
+        else
+            g_print("Save password error: %s", gnome_keyring_result_to_message(result));
+    }
     else
-        g_print("Save password error: %s", gnome_keyring_result_to_message(result));
+    {
+        GnomeKeyringResult result = gnome_keyring_delete_password_sync(
+                    GNOME_KEYRING_NETWORK_PASSWORD,
+                    "user", "MD Router Control",
+                    "server", "gnome.org",
+                    NULL);
+
+        if (result == GNOME_KEYRING_RESULT_OK)
+            g_print("Password deleted\n");
+        else
+            g_print("Delete password error: %s", gnome_keyring_result_to_message(result));
+    }
 }
 
 
@@ -268,10 +286,10 @@ class PrefDialog
 {
 public:
     GtkWidget  *window;
-    string* servAddr;
-    string* user;
-    gchar* passw;
-    string* testAddr;
+    string* servAddr = NULL;
+    string* user = NULL;
+    gchar* passw = NULL;
+    string* testAddr = NULL;
     PrefDialog(GtkWidget *parent, const char* uiDir)
     {
         rect.x = 500;  rect.y = 300;  rect.w = 0;  rect.h = 0;
@@ -332,6 +350,7 @@ private:
     void onConfigure(GdkEvent *event);
     void onOk();
     void onCancel();
+    void procPassw(bool save);
 };
 
 
@@ -355,6 +374,7 @@ void PrefDialog::show()
 {
     gtk_entry_set_text(edAddr, servAddr->data());
     gtk_entry_set_text(edUser, user->data());
+    // after show passw is empty
     if (passw)
         gtk_entry_set_text(edPassw, passw);
     gtk_entry_set_text(edTestAddr, testAddr->data());
@@ -376,6 +396,21 @@ void PrefDialog::onConfigure(GdkEvent *event)
 }
 
 
+void PrefDialog::procPassw(bool save)
+{
+    const gchar *text = gtk_entry_get_text(edPassw);
+    if (text)
+    {
+        if (save)
+            savePassw(text);
+
+        gchar *zero = g_strnfill(strlen(text), '*');
+        gtk_entry_set_text(edPassw, zero);
+        g_free(zero);
+    }
+}
+
+
 void PrefDialog::onOk()
 {
     const gchar *text = gtk_entry_get_text(edAddr);
@@ -384,19 +419,10 @@ void PrefDialog::onOk()
     text = gtk_entry_get_text(edUser);
     if (text)  user->assign(text);
 
-    text = gtk_entry_get_text(edPassw);
-    if (text)
-    {
-        if (!passw || strcmp(text, passw))
-            savePassw(text);
-
-        gchar *zero = g_strnfill(strlen(text), '*');
-        gtk_entry_set_text(edPassw, zero);
-        g_free(zero);
-    }
-
     text = gtk_entry_get_text(edTestAddr);
     if (text)  testAddr->assign(text);
+
+    procPassw(true);
 
     gtk_widget_hide(window);
 }
@@ -404,6 +430,7 @@ void PrefDialog::onOk()
 
 void PrefDialog::onCancel()
 {
+    procPassw(false);
     gtk_widget_hide(window);
 }
 
@@ -718,7 +745,7 @@ bool httpPing(const char* addr)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 0.0.2        16.11.2020\n");
+    printf("MD Router Control 0.0.3        17.11.2020\n");
 
     int bufSize = 256;
     char buf[256] = { 0 };
@@ -772,7 +799,7 @@ int main(int argc, char **argv)
     g_signal_connect(tray, "activate", G_CALLBACK(onTrayActivate), tray);
 
     gtk_status_icon_set_visible(tray, TRUE);
-    gtk_status_icon_set_tooltip_text(tray, "MD Router Control");
+    gtk_status_icon_set_tooltip_text(tray, appTitle);
 
     winRouter = new WebView();
 
