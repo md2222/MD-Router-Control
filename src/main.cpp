@@ -203,7 +203,13 @@ void WebView::loadUrl(const char* url)
     g_signal_connect(winWeb, "delete-event", G_CALLBACK(onCloseCb), this);
     g_signal_connect_after(winWeb, "key_press_event", G_CALLBACK(onKeyPressCb), this);
 
-    web = WEBKIT_WEB_VIEW(webkit_web_view_new());
+    // Websites will not store any data in the client storage. This is normally used to implement private instances.
+    WebKitWebContext *context = webkit_web_context_new_ephemeral();
+    // This process model is indicated for applications which may use a number of web views
+    // ... for example a full-fledged web browser with support for multiple tabs.
+    //webkit_web_context_set_process_model(context, WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES);
+
+    web = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(context));
 
     gtk_container_add(GTK_CONTAINER(winWeb), GTK_WIDGET(web));
 
@@ -745,7 +751,7 @@ bool httpPing(const char* addr)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 0.0.3        17.11.2020\n");
+    printf("MD Router Control 0.0.4        18.11.2020\n");
 
     int bufSize = 256;
     char buf[256] = { 0 };
