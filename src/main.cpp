@@ -204,7 +204,7 @@ void WebView::loadUrl(const char* url)
     g_signal_connect_after(winWeb, "key_press_event", G_CALLBACK(onKeyPressCb), this);
 
     // Websites will not store any data in the client storage. This is normally used to implement private instances.
-    WebKitWebContext *context = webkit_web_context_new_ephemeral();
+    WebKitWebContext *context = webkit_web_context_new_ephemeral();  
     // This process model is indicated for applications which may use a number of web views
     // ... for example a full-fledged web browser with support for multiple tabs.
     //webkit_web_context_set_process_model(context, WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES);
