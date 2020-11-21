@@ -5,13 +5,25 @@ PrefDialog::PrefDialog(GtkWidget *parent, const char* uiDir)
 {
     rect.x = 500;  rect.y = 300;  rect.w = 0;  rect.h = 0;
 
+    uiPath = g_strnfill(MAX_PATH, '\0');
+    strcat(uiPath, uiDir);
+    strcat(uiPath, "settings.ui");
+    //createDialog();
+};
+
+
+PrefDialog::~PrefDialog()
+{
+    gtk_widget_destroy(GTK_WIDGET(window));
+};
+
+
+void PrefDialog::createDialog()
+{
+    window = NULL;
     GtkBuilder *builder = gtk_builder_new();
 
-    char path[256] = { 0 };
-    strcat(path, uiDir);
-    strcat(path, "options.ui");
-
-    if (gtk_builder_add_from_file(builder, path, &error) == 0)
+    if (gtk_builder_add_from_file(builder, uiPath, &error) == 0)
     {
         g_printerr("Error loading file: %s\n", error->message);
         g_clear_error(&error);
@@ -20,7 +32,7 @@ PrefDialog::PrefDialog(GtkWidget *parent, const char* uiDir)
 
     window = GTK_WIDGET (gtk_builder_get_object(builder, "dlgOptions"));
     gtk_window_set_title(GTK_WINDOW (window), "Options");
-    g_signal_connect(G_OBJECT(window), "delete-event", G_CALLBACK(&onCancelCb), this);  //++
+    g_signal_connect(G_OBJECT(window), "delete-event", G_CALLBACK(&onCloseCb), this);  //++
     gtk_widget_add_events(GTK_WIDGET(window), GDK_CONFIGURE);
     g_signal_connect(G_OBJECT(window), "configure-event", G_CALLBACK(&onConfigureCb), this);
 
@@ -36,13 +48,7 @@ PrefDialog::PrefDialog(GtkWidget *parent, const char* uiDir)
     edTestAddr = (GtkEntry*)gtk_builder_get_object(builder, "edTestAddr");
 
     g_object_unref(G_OBJECT (builder));
-};
-
-
-PrefDialog::~PrefDialog()
-{
-    gtk_widget_destroy(GTK_WIDGET(window));
-};
+}
 
 
 void PrefDialog::setRect(Rect* r)
@@ -63,6 +69,17 @@ Rect PrefDialog::getRect()
 
 void PrefDialog::show()
 {
+    createDialog();
+
+    if (!window)
+    {
+        printf("Error creating settings dialog\n");
+        return;
+    }
+
+    //printf("PrefDialog::show:    %d    %d\n",rect.x, rect.y);
+    gtk_window_move(GTK_WINDOW(window), rect.x, rect.y);
+
     gtk_entry_set_text(edAddr, servAddr->data());
     gtk_entry_set_text(edUser, user->data());
     // after show passw is empty
@@ -70,26 +87,29 @@ void PrefDialog::show()
         gtk_entry_set_text(edPassw, passw);
     gtk_entry_set_text(edTestAddr, testAddr->data());
 
-    gtk_window_move(GTK_WINDOW(window), rect.x, rect.y);
     gtk_widget_show_all(window);
 }
 
-
+/*
 void PrefDialog::hide()
 {
     gtk_widget_hide(window);
 }
+*/
 
-
-void PrefDialog::onConfigure(GdkEvent *event)
+gboolean PrefDialog::onConfigure(GdkEvent *event)
 {
-    rect.x = event->configure.x;
-    rect.y = event->configure.y;
+    //rect.x = event->configure.x;
+    //rect.y = event->configure.y;
+    gtk_window_get_position(GTK_WINDOW(window), &rect.x, &rect.y);
+    //printf("PrefDialog::onConfigure:    %d    %d\n",rect.x, rect.y);
+    return FALSE;
 }
 
 
 void PrefDialog::procPassw(bool save)
 {
+    //printf("PrefDialog::procPassw\n");
     const gchar *text = gtk_entry_get_text(edPassw);
     if (text)
     {
@@ -116,13 +136,22 @@ void PrefDialog::onOk()
 
     procPassw(true);
 
-    gtk_widget_hide(window);
+    //gtk_widget_hide(window);
+    gtk_widget_destroy(window);
 }
 
 
 void PrefDialog::onCancel()
 {
     procPassw(false);
-    gtk_widget_hide(window);
+    //gtk_widget_hide(window);
+    gtk_widget_destroy(window);
 }
 
+
+gboolean PrefDialog::onClose()
+{
+    procPassw(false);
+    //return gtk_widget_hide_on_delete(window);
+    return FALSE;
+}

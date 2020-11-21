@@ -34,10 +34,10 @@ string user;
 //string passw;
 string testAddr;
 
-Rect prefDlgRect;
-GKeyFile* iniFile = 0;
+GKeyFile* iniFile;
 
 PrefDialog* pref = 0;
+Rect prefDlgRect;
 WebView* winRouter = 0;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ static void onTrayActivate(GtkStatusIcon *status_icon, gpointer user_data)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 0.0.5        20.11.2020\n");
+    printf("MD Router Control 0.0.5        21.11.2020\n");
 
     int bufSize = 256;
     char buf[256] = { 0 };

@@ -53,8 +53,7 @@ gchar* iniGetValue(GKeyFile* file, const char* group, const char* name, const ch
     if (val == NULL || g_error_matches(err, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_KEY_NOT_FOUND))
     {
         g_warning ("Error finding key in key file: %s", err->message);
-        if (def)
-            val = g_strdup(def);
+        val = g_strdup(def);
     }
 
     return val;
@@ -92,3 +91,4 @@ void* iniGetList(GKeyFile* file, const char* group, const char* name, int type, 
     else
         return NULL;
 }
+
