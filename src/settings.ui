@@ -152,7 +152,7 @@
               <object class="GtkEntry" id="edTestAddr">
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
-                <property name="tooltip_text" translatable="yes">IP address. Tries to connect to port 80.</property>
+                <property name="tooltip_text" translatable="yes">Host name or IP address. Tries to connect to port 80.</property>
               </object>
               <packing>
                 <property name="left_attach">1</property>

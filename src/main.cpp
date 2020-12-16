@@ -40,6 +40,8 @@ PrefDialog* pref = 0;
 Rect prefDlgRect;
 WebView* winRouter = 0;
 
+void setTrayIcon(bool isConnected, const char* tooltip);
+static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpointer data);
 //----------------------------------------------------------------------------------------------------------------------
 // https://developer.gnome.org/gtk3/stable/GtkDialog.html#GtkDialogFlags
 
@@ -124,27 +126,31 @@ void findPassw(gchar **passw)
 
 bool httpPing(const char* addr)
 {
-    if (!addr)  return false;
+    if (!addr || !strlen(addr))  return false;
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0)
     {
-        printf("Open socket error\n");
+        printf("Open socket error: %d: %s\n", errno, strerror(errno));
         return false;
     }
 
-    /*struct hostent *serv = gethostbyname(addr);
+    struct hostent *serv = gethostbyname(addr);
     if (serv == NULL)
     {
-        fprintf(stderr,"gethostbyname error. No such host\n");
+        printf("gethostbyname error: %d: %s\n", h_errno, hstrerror(h_errno));
+        // EADDRNOTAVAIL	99	/* Cannot assign requested address */
+        // EHOSTDOWN	112	/* Host is down */
+        // EFAULT		14	/* Bad address */
+        errno = 99;
         return false;
-    }*/
+    }
 
     struct sockaddr_in saddr;
     bzero((char *) &saddr, sizeof(saddr));
     saddr.sin_family = AF_INET;
-    //bcopy((char *)serv->h_addr, (char *)&saddr.sin_addr.s_addr, serv->h_length);
-    saddr.sin_addr.s_addr = inet_addr(addr);
+    bcopy((char *)serv->h_addr, (char *)&saddr.sin_addr.s_addr, serv->h_length);
+    //saddr.sin_addr.s_addr = inet_addr(addr);
     saddr.sin_port = htons(80);
 
     int flags = fcntl(sock, F_GETFL, NULL);
@@ -152,43 +158,66 @@ bool httpPing(const char* addr)
 
     bool ok = false;
 
+    // ENETUNREACH	101	/* Network is unreachable */
+    // EINPROGRESS  115 /* Operation now in progress */
     int res = connect(sock, (struct sockaddr *)&saddr, sizeof(saddr));
-    printf("Socket connect result: %d, errno=%d\n", res, errno);
+    //printf("Socket connect result: %d, errno=%d\n", res, errno);
 
-    fd_set fdset;
-    FD_ZERO(&fdset);
-    FD_SET(sock, &fdset);
-    struct timeval tv;
-    tv.tv_sec = 5;
-    tv.tv_usec = 0;
-
-    // EINTR            4      /* Interrupted system call */
-    int n = 10;
-    while (n-- >= 0)
+    if (res < 0 && errno != EINPROGRESS)
     {
-        res = select(sock + 1, NULL, &fdset, NULL, &tv);
-        printf("Socket select result: %d, errno=%d\n", res, errno);
-        if (!(res == -1 && errno == EINTR))
-            break;
+        printf("Socket connect error: %d: %s\n", errno, strerror(errno));
     }
-
-    if (res == 1)
+    else
     {
-        int so_error;
-        socklen_t len = sizeof so_error;
+        // EINTR            4      /* Interrupted system call */
+        int n = 10;
+        while (n-- >= 0)
+        {
+            fd_set fdset;
+            FD_ZERO(&fdset);
+            FD_SET(sock, &fdset);
+            struct timeval tv;
+            tv.tv_sec = 10;
+            tv.tv_usec = 0;
 
-        getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
-        printf("Socket so_error: %d\n", so_error);
+            res = select(sock + 1, NULL, &fdset, NULL, &tv);
+            printf("Socket select result: %d, err: %d %s\n", res, errno, strerror(errno));
+            if (res == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                else
+                    break;
+            }
 
-        // ECONNREFUSED	111	/* Connection refused */
-        // ENETUNREACH	101	/* Network is unreachable */
-        if (so_error == 0 || so_error == ECONNREFUSED)
+            int so_error;
+            socklen_t len = sizeof so_error;
+
+            // ECONNREFUSED	111	/* Connection refused */ - refused by server?
+            // ENETUNREACH	101	/* Network is unreachable */
+            getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+            printf("Socket so_error: %d: %s\n", so_error, strerror(so_error));
+
+            if (so_error != ECONNREFUSED)
+            {
+                if (so_error != 0)
+                    break;
+
+                int isset = FD_ISSET(sock, &fdset);
+                printf("Socket FD_ISSET: %d\n", isset);
+                if (!isset)
+                    continue;
+            }
+
             ok = true;
+            break;
+        }
     }
 
     fcntl(sock, F_SETFL, flags);
     shutdown(sock, SHUT_RDWR);
     close(sock);
+
     return ok;
 }
 //----------------------------------------------------------------------------------------------------------------------
@@ -266,25 +295,76 @@ static void onExit()
         iniSaveToFile(iniFile, confPath.data());
     }
 
+    GNetworkMonitor  *netMon = g_network_monitor_get_default ();
+    //g_signal_handlers_disconnect_by_func(netMon, G_CALLBACK(onNetworkChanged), NULL);  // ?
+    g_signal_handlers_disconnect_by_func(netMon, (void*)onNetworkChanged, NULL);
+
     gtk_main_quit();
+}
+
+/*
+static void onTestAddr(GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+    printf("onTestAddr: \n");
+
+    g_autoptr(GError) err = NULL;
+    gboolean ok = g_network_monitor_can_reach_finish((GNetworkMonitor*)source_object, res, &err);
+    printf("onTestAddr: %d\n", ok);
+}
+*/
+
+void setTrayIcon(bool isConnected, const char* tooltip)
+{
+    static int status = 0;
+    static string currTooltip;
+
+    if (!status || (status > 0) != isConnected)
+    {
+        status = isConnected ? 1 : -1;
+
+        if (isConnected)
+        {
+            printf("setTrayIcon: Connected\n");
+            gtk_status_icon_set_from_file(tray, (appDir + "icons/trayIcon-2.png").data());
+        }
+        else
+        {
+            printf("setTrayIcon: Disconnected\n");
+            gtk_status_icon_set_from_file(tray, (appDir + "icons/trayIcon-1.png").data());
+        }
+    }
+
+    if (currTooltip != tooltip)
+    {
+        currTooltip = tooltip;
+        gtk_status_icon_set_tooltip_text(tray, tooltip);
+    }
 }
 
 
 gboolean httpPingLater(gpointer data)
 {
-    if (!testAddr.empty())
+    //printf("httpPingLater:   testAddr=%s\n", testAddr.data());
+    bool ok = false;
+    string tooltip = appTitle;
+
+    // ok icon by default
+    if (testAddr.empty())
     {
-        if (httpPing(testAddr.data()))
-        {
-            printf("httpPing true\n");
-            gtk_status_icon_set_from_file(tray, (appDir + "icons/trayIcon-2.png").data());
-        }
-        else
-        {
-            printf("httpPing false\n");
-            gtk_status_icon_set_from_file(tray, (appDir + "icons/trayIcon-1.png").data());
-        }
+        ok = true;
+        tooltip.append("\nStatus unknown\nTest address is empty");
     }
+    else
+    {
+        ok = httpPing(testAddr.data());
+
+        if (ok)
+            tooltip.append("\nConnected");
+        else
+            tooltip.append("\nNot connected\n").append(strerror(errno));
+    }
+
+    setTrayIcon(ok, tooltip.data());
 
     return FALSE;
 }
@@ -312,12 +392,52 @@ static void onTrayActivate(GtkStatusIcon *status_icon, gpointer user_data)
     wait = false;
 }
 
+int pingCountdown = 0;
+
+
+gint onPingTimeCb(gpointer data)
+{
+    //printf("onPingTimeCb:  pingCountdown=%d\n", pingCountdown);
+    pingCountdown--;
+    if (pingCountdown <= 0)
+    {
+        //httpPing(testAddr.data());
+        httpPingLater(NULL);
+        return 0;
+    }
+    return 1;
+}
+
+
+void setPingCountdown()
+{
+    //printf("setPingCountdown:  pingCountdown=%d\n", pingCountdown);
+    if (pingCountdown <= 0)
+        g_timeout_add(1000, onPingTimeCb, NULL);
+
+    pingCountdown = 5;
+}
+
+
+static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpointer data)
+{
+    printf("onNetworkChanged:  available=%d\n", available);
+    //static int status = 0;
+
+    /*if (!status || (status > 0) != available)
+    {
+        status = available ? 1 : -1;
+        httpPing(testAddr.data());
+    }*/
+    setPingCountdown();
+}
+
 
 // http://zetcode.com/gui/gtk2/menusandtoolbars/
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 0.0.5        21.11.2020\n");
+    printf("MD Router Control 0.0.6        15.12.2020\n");
 
     int bufSize = 256;
     char buf[256] = { 0 };
@@ -419,6 +539,10 @@ int main(int argc, char **argv)
         user = iniGetValue(iniFile, "public", "user", "");
         testAddr = iniGetValue(iniFile, "public", "testAddr", "");
     }
+
+
+    GNetworkMonitor *netMon = g_network_monitor_get_default();
+    g_signal_connect(netMon, "network-changed", G_CALLBACK(onNetworkChanged), NULL);
 
 
     g_idle_add(httpPingLater, NULL);
