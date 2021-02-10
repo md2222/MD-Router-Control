@@ -135,6 +135,7 @@ void PrefDialog::onOk()
     if (text)  testAddr->assign(text);
 
     procPassw(true);
+    saveSettings();
 
     //gtk_widget_hide(window);
     gtk_widget_destroy(window);

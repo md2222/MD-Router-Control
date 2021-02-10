@@ -1,7 +1,6 @@
 #!/bin/make
-#Makefile curl1
 
-SOURCES = main.cpp settings.cpp prefdialog.cpp webview.cpp
+SOURCES = main.cpp prefdialog.cpp settings.cpp webview.cpp
 
 CFLAGS  = `pkg-config --cflags gtk+-3.0`
 #CFLAGS += -I../../api/
@@ -15,3 +14,29 @@ TARGET  = mdrctrl
 
 all:
 	g++ $(CFLAGS) $(SOURCES) -o $(TARGET) $(LIBS)
+	
+
+PREFIX=/usr/local
+
+#	which mdrctrl && { echo ! mdrctrl already installed, first uninstall old version; exit 1; }  || echo installing...
+install: mdrctrl
+	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/mdrctrl"
+	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/mdrctrl/icons"
+	cp -- mdrctrl "$(DESTDIR)$(PREFIX)/bin/"
+	cp -- settings.ui "$(DESTDIR)$(PREFIX)/share/mdrctrl/"
+	cp -- icons/*.png "$(DESTDIR)$(PREFIX)/share/mdrctrl/icons/"
+	cp -- mdrctrl.desktop "$(DESTDIR)$(PREFIX)/share/applications"
+	cp -- icons/mdrctrl.png /usr/share/pixmaps
+	
+	
+uninstall:
+	-rm -- "$(DESTDIR)$(PREFIX)/bin/mdrctrl"
+	-rm -r -- "$(DESTDIR)$(PREFIX)/share/mdrctrl"
+	-rm -- "$(DESTDIR)$(PREFIX)/share/applications/mdrctrl.desktop"
+	-rm -- /usr/share/pixmaps/mdrctrl.png
+	
+	
+clean:
+	-rm -f -- *.o mdrctrl	
+
+.PHONY: all install uninstall clean

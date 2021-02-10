@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Encoding=UTF-8
+Name=MD Router Control
+Type=Application
+Terminal=false
+Exec=mdrctrl
+Icon=mdrctrl
+Categories=Network;

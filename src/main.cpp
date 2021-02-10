@@ -6,6 +6,8 @@
 #include <gnome-keyring-1/gnome-keyring.h>
 #include <gnome-keyring-1/gnome-keyring-memory.h>
 
+//#include "gnome-client.h"
+
 //#include <sys/statvfs.h>
 //#include <sys/sysinfo.h>
 #include <sys/socket.h>
@@ -24,7 +26,8 @@
 using namespace std;
 
 char* appTitle = "MD Router Control";
-string appDir;
+//string appDir;
+string appDataDir;
 string confPath;
 
 GtkStatusIcon *tray;
@@ -39,6 +42,8 @@ GKeyFile* iniFile;
 PrefDialog* pref = 0;
 Rect prefDlgRect;
 WebView* winRouter = 0;
+
+Log log("/home/dima/mdrctrl.log");
 
 void setTrayIcon(bool isConnected, const char* tooltip);
 static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpointer data);
@@ -253,7 +258,7 @@ static void onOptions()
 {
     if (!pref)
     {
-        pref = new PrefDialog(NULL, appDir.data());
+        pref = new PrefDialog(NULL, appDataDir.data());
         pref->setRect(&prefDlgRect);
         pref->servAddr = &servAddr;
         pref->user = &user;
@@ -271,8 +276,10 @@ static void onOptions()
 }
 
 
-static void onExit()
+void saveSettings()
 {
+    log.write(Log::LOG_PRFX_TIME, "saveSettings\n");
+
     if (!iniFile)
         printf("Key file was not opened.\n");
     else
@@ -293,7 +300,14 @@ static void onExit()
         iniSetValue(iniFile, "public", "testAddr", testAddr.data());
 
         iniSaveToFile(iniFile, confPath.data());
+        log.write(Log::LOG_PRFX_TIME, "saveSettings - end\n");
     }
+}
+
+
+static void onExit()
+{
+    saveSettings();
 
     GNetworkMonitor  *netMon = g_network_monitor_get_default ();
     //g_signal_handlers_disconnect_by_func(netMon, G_CALLBACK(onNetworkChanged), NULL);  // ?
@@ -325,12 +339,12 @@ void setTrayIcon(bool isConnected, const char* tooltip)
         if (isConnected)
         {
             printf("setTrayIcon: Connected\n");
-            gtk_status_icon_set_from_file(tray, (appDir + "icons/trayIcon-2.png").data());
+            gtk_status_icon_set_from_file(tray, (appDataDir + "icons/trayIcon-2.png").data());
         }
         else
         {
             printf("setTrayIcon: Disconnected\n");
-            gtk_status_icon_set_from_file(tray, (appDir + "icons/trayIcon-1.png").data());
+            gtk_status_icon_set_from_file(tray, (appDataDir + "icons/trayIcon-1.png").data());
         }
     }
 
@@ -433,37 +447,46 @@ static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpoin
 }
 
 
+struct Args
+{
+    int argc;
+    char **argv;
+};
+
+
 // http://zetcode.com/gui/gtk2/menusandtoolbars/
 
-int main(int argc, char **argv)
+//int main(int argc, char **argv)
+static void onAppInit(GApplication *app, Args* args)
 {
-    printf("MD Router Control 0.0.6        15.12.2020\n");
-
     int bufSize = 256;
     char buf[256] = { 0 };
 
-    if (readlink("/proc/self/exe", buf, bufSize) != -1)
+    /*if (readlink("/proc/self/exe", buf, bufSize) != -1)
     {
         dirname(buf);
         strcat(buf, "/");
         //printf("appDir=%s\n", buf);
         //printf("argv[0]=%s\n", argv[0]);
         appDir = buf;
-    }
+    } */
 
-    //const gchar *configDir = g_get_user_config_dir();
+    gchar *baseName = g_path_get_basename(args->argv[0]);
+    appDataDir = string("/usr/local/share/") + baseName + "/";
+    const gchar *configDir = g_get_user_config_dir();
     //printf("configDir=%s\n", configDir);
     // g_get_home_dir ()
     // g_get_user_data_dir()  - ~/.local/share
 
-    printf("appDir=%s\n", appDir.data());
 
-    gchar *baseName = g_path_get_basename(argv[0]);
 
-    confPath = appDir + baseName + ".conf";
+    confPath = string(configDir) + "/" + baseName + ".conf";
+
+    //printf("appDir=%s\n", appDir.data());
+    printf("appDataDir=%s\n", appDataDir.data());
     printf("confPath=%s\n", confPath.data());
 
-    gtk_init (&argc, &argv);
+    gtk_init (&(args->argc), &(args->argv));
 
     GtkWidget *trayMenu = gtk_menu_new();
 
@@ -486,7 +509,7 @@ int main(int argc, char **argv)
     gtk_menu_shell_append(GTK_MENU_SHELL(trayMenu), miExit);
     g_signal_connect(miExit, "activate", G_CALLBACK(onExit), NULL);
 
-    tray = gtk_status_icon_new_from_file((appDir + "icons/trayIcon-1.png").data());
+    tray = gtk_status_icon_new_from_file((appDataDir + "icons/trayIcon-1.png").data());
 
     g_signal_connect(tray, "popup-menu", G_CALLBACK(trayIconMenu), trayMenu);
     g_signal_connect(tray, "activate", G_CALLBACK(onTrayActivate), tray);
@@ -496,7 +519,7 @@ int main(int argc, char **argv)
 
     winRouter = new WebView();
 
-    string iconPath = appDir + "icons/" + baseName + ".png";
+    string iconPath = appDataDir + "icons/" + baseName + ".png";
     winRouter->setIcon(iconPath.data());
 
 
@@ -549,5 +572,76 @@ int main(int argc, char **argv)
 
     gtk_main ();
 
-    return 0;
+    //return 0;
+}
+
+
+void onAppShutdown(GApplication *app, gpointer data)
+{
+    log.write(Log::LOG_PRFX_TIME, "onAppShutdown\n");
+}
+
+
+void onSysSignal(int sig)
+{
+    static bool isHandled = false;
+    if (isHandled)  return;
+    isHandled = true;
+
+    //sig = 1;
+    if (sig == SIGHUP)
+        log.write(Log::LOG_PRFX_TIME, "SIGHUP\n");
+    else if (sig == SIGINT)
+        log.write(Log::LOG_PRFX_TIME, "SIGINT\n");
+    else if (sig == SIGTERM)
+        log.write(Log::LOG_PRFX_TIME, "SIGTERM\n");
+
+    /* Do something useful here */
+    onExit();
+
+    //exit(EXIT_FAILURE);
+}
+
+/*
+void onQueryEnd(GtkApplication *app, gpointer data)
+{
+    log.write(Log::LOG_PRFX_TIME, "onQueryEnd\n");
+
+}
+*/
+
+int main(int argc, char **argv)
+{
+    printf("MD Router Control 1.0.0      10.02.2021\n");
+
+    /*signal(SIGHUP, onSysSignal);
+    signal(SIGINT, onSysSignal);
+    signal(SIGTERM, onSysSignal);*/
+
+    if (signal(SIGHUP, onSysSignal) == SIG_ERR)
+        printf("Can't catch SIGHUP\n");
+    if (signal(SIGINT, onSysSignal) == SIG_ERR)
+        printf("Can't catch SIGINT\n");
+    if (signal(SIGTERM, onSysSignal) == SIG_ERR)
+        printf("Can't catch SIGTERM\n");
+
+    GtkApplication *app;
+    int status;
+    Args args;
+
+    args.argc = argc;
+    args.argv = argv;
+
+    app = gtk_application_new ("org.gnome.mdroutercontrol", G_APPLICATION_NON_UNIQUE);
+    //bool v = TRUE;  // PROP_REGISTER_SESSION = 1 ?
+    //gtk_application_set_property(G_APPLICATION(app), PROP_REGISTER_SESSION, &v, NULL);
+    g_signal_connect (app, "activate", G_CALLBACK(onAppInit), &args);
+    g_signal_connect (app, "shutdown", G_CALLBACK(onAppShutdown), &args);
+    //g_signal_connect (app, "query-end", G_CALLBACK(onQueryEnd), NULL);  // signal 'query-end' is invalid for instance ... of type 'GtkApplication'
+    //printf("", app.reg)
+
+    status = g_application_run (G_APPLICATION (app), argc, argv);
+    g_object_unref (app);
+
+    return status;
 }
