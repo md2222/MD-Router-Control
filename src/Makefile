@@ -22,6 +22,7 @@ PREFIX=/usr/local
 install: mdrctrl
 	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/mdrctrl"
 	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/mdrctrl/icons"
+	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/applications"
 	cp -- mdrctrl "$(DESTDIR)$(PREFIX)/bin/"
 	cp -- settings.ui "$(DESTDIR)$(PREFIX)/share/mdrctrl/"
 	cp -- icons/*.png "$(DESTDIR)$(PREFIX)/share/mdrctrl/icons/"
