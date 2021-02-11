@@ -43,7 +43,7 @@ PrefDialog* pref = 0;
 Rect prefDlgRect;
 WebView* winRouter = 0;
 
-Log log("/home/dima/mdrctrl.log");
+//Log log("/tmp/mdrctrl.log");
 
 void setTrayIcon(bool isConnected, const char* tooltip);
 static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpointer data);
@@ -278,7 +278,7 @@ static void onOptions()
 
 void saveSettings()
 {
-    log.write(Log::LOG_PRFX_TIME, "saveSettings\n");
+    //log.write(Log::LOG_PRFX_TIME, "saveSettings\n");
 
     if (!iniFile)
         printf("Key file was not opened.\n");
@@ -300,7 +300,7 @@ void saveSettings()
         iniSetValue(iniFile, "public", "testAddr", testAddr.data());
 
         iniSaveToFile(iniFile, confPath.data());
-        log.write(Log::LOG_PRFX_TIME, "saveSettings - end\n");
+        //log.write(Log::LOG_PRFX_TIME, "saveSettings - end\n");
     }
 }
 
@@ -578,7 +578,7 @@ static void onAppInit(GApplication *app, Args* args)
 
 void onAppShutdown(GApplication *app, gpointer data)
 {
-    log.write(Log::LOG_PRFX_TIME, "onAppShutdown\n");
+    //log.write(Log::LOG_PRFX_TIME, "onAppShutdown\n");
 }
 
 
@@ -589,12 +589,12 @@ void onSysSignal(int sig)
     isHandled = true;
 
     //sig = 1;
-    if (sig == SIGHUP)
+    /*if (sig == SIGHUP)
         log.write(Log::LOG_PRFX_TIME, "SIGHUP\n");
     else if (sig == SIGINT)
         log.write(Log::LOG_PRFX_TIME, "SIGINT\n");
     else if (sig == SIGTERM)
-        log.write(Log::LOG_PRFX_TIME, "SIGTERM\n");
+        log.write(Log::LOG_PRFX_TIME, "SIGTERM\n");*/
 
     /* Do something useful here */
     onExit();
@@ -612,7 +612,7 @@ void onQueryEnd(GtkApplication *app, gpointer data)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 1.0.0      10.02.2021\n");
+    printf("MD Router Control 1.0.1      11.02.2021\n");
 
     /*signal(SIGHUP, onSysSignal);
     signal(SIGINT, onSysSignal);
