@@ -22,19 +22,18 @@ PREFIX=/usr/local
 install: mdrctrl
 	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/mdrctrl"
 	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/mdrctrl/icons"
-	mkdir -p -- "$(DESTDIR)$(PREFIX)/share/applications"
 	cp -- mdrctrl "$(DESTDIR)$(PREFIX)/bin/"
 	cp -- settings.ui "$(DESTDIR)$(PREFIX)/share/mdrctrl/"
 	cp -- icons/*.png "$(DESTDIR)$(PREFIX)/share/mdrctrl/icons/"
-	cp -- mdrctrl.desktop "$(DESTDIR)$(PREFIX)/share/applications"
-	cp -- icons/mdrctrl.png /usr/share/pixmaps
+	cp -- mdrctrl.desktop "/usr/share/applications/"
+	cp -- icons/mdrctrl.png "/usr/share/pixmaps/"
 	
 	
 uninstall:
 	-rm -- "$(DESTDIR)$(PREFIX)/bin/mdrctrl"
 	-rm -r -- "$(DESTDIR)$(PREFIX)/share/mdrctrl"
-	-rm -- "$(DESTDIR)$(PREFIX)/share/applications/mdrctrl.desktop"
-	-rm -- /usr/share/pixmaps/mdrctrl.png
+	-rm -- "/usr/share/applications/mdrctrl.desktop"
+	-rm -- "/usr/share/pixmaps/mdrctrl.png"
 	
 	
 clean:

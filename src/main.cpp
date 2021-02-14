@@ -478,8 +478,6 @@ static void onAppInit(GApplication *app, Args* args)
     // g_get_home_dir ()
     // g_get_user_data_dir()  - ~/.local/share
 
-
-
     confPath = string(configDir) + "/" + baseName + ".conf";
 
     //printf("appDir=%s\n", appDir.data());
