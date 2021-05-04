@@ -18,14 +18,10 @@ class WebView
 public:
     GtkWindow *winWeb = 0;
     GdkPixbuf *winIcon;
-    WebView()
-    {
-        winRect.x = 200;  winRect.y = 100;  winRect.w = 1280;  winRect.h = 900;
-    };
+    WebView();
     ~WebView()
     {
     };
-    void setIcon(const char* fileName);
     void loadUrl(const char* url);
     void show();
     void setRect(Rect* rect);

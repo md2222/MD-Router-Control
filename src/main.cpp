@@ -30,7 +30,9 @@ char* appTitle = "MD Router Control";
 string appDataDir;
 string confPath;
 
-GtkStatusIcon *tray;
+GtkStatusIcon *tray = 0;
+GdkPixbuf *pixConnected = 0;
+GdkPixbuf *pixDisconnected = 0;
 
 string servAddr;
 string user;
@@ -339,12 +341,12 @@ void setTrayIcon(bool isConnected, const char* tooltip)
         if (isConnected)
         {
             printf("setTrayIcon: Connected\n");
-            gtk_status_icon_set_from_file(tray, (appDataDir + "icons/trayIcon-2.png").data());
+            gtk_status_icon_set_from_pixbuf(tray, pixConnected);
         }
         else
         {
             printf("setTrayIcon: Disconnected\n");
-            gtk_status_icon_set_from_file(tray, (appDataDir + "icons/trayIcon-1.png").data());
+            gtk_status_icon_set_from_pixbuf(tray, pixDisconnected);
         }
     }
 
@@ -507,7 +509,10 @@ static void onAppInit(GApplication *app, Args* args)
     gtk_menu_shell_append(GTK_MENU_SHELL(trayMenu), miExit);
     g_signal_connect(miExit, "activate", G_CALLBACK(onExit), NULL);
 
-    tray = gtk_status_icon_new_from_file((appDataDir + "icons/trayIcon-1.png").data());
+    pixConnected = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-2.png", NULL);
+    pixDisconnected  = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-1.png", NULL);
+
+    tray = gtk_status_icon_new_from_pixbuf(pixDisconnected);
 
     g_signal_connect(tray, "popup-menu", G_CALLBACK(trayIconMenu), trayMenu);
     g_signal_connect(tray, "activate", G_CALLBACK(onTrayActivate), tray);
@@ -516,10 +521,6 @@ static void onAppInit(GApplication *app, Args* args)
     gtk_status_icon_set_tooltip_text(tray, appTitle);
 
     winRouter = new WebView();
-
-    string iconPath = appDataDir + "icons/" + baseName + ".png";
-    winRouter->setIcon(iconPath.data());
-
 
     prefDlgRect.clear();
 
@@ -610,7 +611,7 @@ void onQueryEnd(GtkApplication *app, gpointer data)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 1.0.1      11.02.2021\n");
+    printf("MD Router Control 1.1.1      4.05.2021\n");
 
     /*signal(SIGHUP, onSysSignal);
     signal(SIGINT, onSysSignal);

@@ -1,15 +1,15 @@
 #include "webview.h"
 
 
-void WebView::setIcon(const char* fileName)
+WebView::WebView()
 {
+    winRect.x = 200;  winRect.y = 100;  winRect.w = 1280;  winRect.h = 900;
+
     g_autoptr(GError) err = NULL;
-
-    winIcon = gdk_pixbuf_new_from_file(fileName, &err);
-
+    GdkPixbuf *winIcon = gdk_pixbuf_new_from_resource ("/app/icons/mdrctrl.png", NULL);
     if (!winIcon)
-        g_warning ("Load window icon error: %s\n%s\n", err->message, fileName);
-}
+        g_warning ("Load window icon error: %s\n", err->message);
+};
 
 
 bool WebView::isActive()
@@ -79,7 +79,10 @@ void WebView::loadUrl(const char* url)
 
     winWeb = (GtkWindow *)gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(winWeb), 1280, 900);
-    gtk_window_set_icon (winWeb, winIcon);
+
+    if (winIcon)
+        gtk_window_set_icon (winWeb, winIcon);
+
     g_signal_connect(winWeb, "delete-event", G_CALLBACK(onCloseCb), this);
     g_signal_connect_after(winWeb, "key_press_event", G_CALLBACK(onKeyPressCb), this);
 
