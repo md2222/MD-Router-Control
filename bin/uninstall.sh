@@ -8,7 +8,7 @@ echo "/usr/share/applications/mdrctrl.desktop"
 echo "/usr/share/pixmaps/mdrctrl.png"
 echo ""
 
-echo -n "continue? (y/n): "
+echo -n "Continue? (y/n): "
  
 read ans
  

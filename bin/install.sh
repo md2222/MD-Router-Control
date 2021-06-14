@@ -8,7 +8,7 @@ echo "/usr/share/applications/mdrctrl.desktop"
 echo "/usr/share/pixmaps/mdrctrl.png"
 echo ""
 
-echo -n "continue? (y/n): "
+echo -n "Continue? (y/n): "
  
 read ans
  
@@ -19,6 +19,7 @@ then
 cp -i -- mdrctrl "/usr/local/bin/"
 cp -i -- mdrctrl.desktop "/usr/share/applications/"
 cp -i -- mdrctrl.png "/usr/share/pixmaps/"
+chmod 755 /usr/local/bin/mdrctrl
 
 
 echo "done"
