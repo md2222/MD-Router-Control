@@ -6,7 +6,7 @@ WebView::WebView()
     winRect.x = 200;  winRect.y = 100;  winRect.w = 1280;  winRect.h = 900;
 
     g_autoptr(GError) err = NULL;
-    GdkPixbuf *winIcon = gdk_pixbuf_new_from_resource ("/app/icons/mdrctrl.png", NULL);
+    winIcon = gdk_pixbuf_new_from_resource ("/app/icons/mdrctrl.png", NULL);
     if (!winIcon)
         g_warning ("Load window icon error: %s\n", err->message);
 };
@@ -79,6 +79,7 @@ void WebView::loadUrl(const char* url)
 
     winWeb = (GtkWindow *)gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(winWeb), 1280, 900);
+    gtk_window_set_title(GTK_WINDOW(winWeb), "MD Router Control");
 
     if (winIcon)
         gtk_window_set_icon (winWeb, winIcon);

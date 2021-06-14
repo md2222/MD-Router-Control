@@ -17,7 +17,7 @@ class WebView
 {
 public:
     GtkWindow *winWeb = 0;
-    GdkPixbuf *winIcon;
+    GdkPixbuf *winIcon = 0;
     WebView();
     ~WebView()
     {

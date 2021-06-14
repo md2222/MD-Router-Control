@@ -13,6 +13,7 @@ TARGET  = mdrctrl
 
 
 all:
+	glib-compile-resources --generate-source resources.xml
 	g++ $(CFLAGS) $(SOURCES) -o $(TARGET) $(LIBS)
 	
 

@@ -138,14 +138,14 @@ bool httpPing(const char* addr)
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0)
     {
-        printf("Open socket error: %d: %s\n", errno, strerror(errno));
+        fprintf(stderr, "Open socket error: %d: %s\n", errno, strerror(errno));
         return false;
     }
 
     struct hostent *serv = gethostbyname(addr);
     if (serv == NULL)
     {
-        printf("gethostbyname error: %d: %s\n", h_errno, hstrerror(h_errno));
+        fprintf(stderr, "gethostbyname error: %d: %s\n", h_errno, hstrerror(h_errno));
         // EADDRNOTAVAIL	99	/* Cannot assign requested address */
         // EHOSTDOWN	112	/* Host is down */
         // EFAULT		14	/* Bad address */
@@ -172,7 +172,7 @@ bool httpPing(const char* addr)
 
     if (res < 0 && errno != EINPROGRESS)
     {
-        printf("Socket connect error: %d: %s\n", errno, strerror(errno));
+        fprintf(stderr, "Socket connect error: %d: %s\n", errno, strerror(errno));
     }
     else
     {
@@ -283,7 +283,7 @@ void saveSettings()
     //log.write(Log::LOG_PRFX_TIME, "saveSettings\n");
 
     if (!iniFile)
-        printf("Key file was not opened.\n");
+        fprintf(stderr, "Key file was not opened.\n");
     else
     {
         Rect r = winRouter->getRect();
@@ -437,7 +437,7 @@ void setPingCountdown()
 
 static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpointer data)
 {
-    printf("onNetworkChanged:  available=%d\n", available);
+    //printf("onNetworkChanged:  available=%d\n", available);
     //static int status = 0;
 
     /*if (!status || (status > 0) != available)
@@ -455,6 +455,17 @@ struct Args
     char **argv;
 };
 
+
+string currTimeStr()
+{
+    char sz[32];
+    time_t tt;
+    struct tm lt;
+    time (&tt);
+    localtime_r(&tt, &lt);
+    strftime(sz, sizeof(sz), "%Y-%m-%d %H:%M:%S", &lt);
+    return string(sz);
+}
 
 // http://zetcode.com/gui/gtk2/menusandtoolbars/
 
@@ -481,10 +492,14 @@ static void onAppInit(GApplication *app, Args* args)
     // g_get_user_data_dir()  - ~/.local/share
 
     confPath = string(configDir) + "/" + baseName + ".conf";
+    //string logPath = string(configDir) + "/" + baseName + ".log";
 
     //printf("appDir=%s\n", appDir.data());
     printf("appDataDir=%s\n", appDataDir.data());
     printf("confPath=%s\n", confPath.data());
+
+    //freopen(logPath.data(), "a", stderr); //++
+    //fprintf(stderr, "================================================================================\n%s\n", currTimeStr().data());
 
     gtk_init (&(args->argc), &(args->argv));
 
@@ -535,7 +550,7 @@ static void onAppInit(GApplication *app, Args* args)
     iniFile = iniOpen(confPath.data());
 
     if (!iniFile)
-        printf("ini.open error\n");
+        fprintf(stderr, "ini.open error\n");
     else
     {
         Rect r;
@@ -611,36 +626,44 @@ void onQueryEnd(GtkApplication *app, gpointer data)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 1.1.1      4.05.2021\n");
+    printf("MD Router Control 1.1.4      14.06.2021\n");
+    int status;
 
-    /*signal(SIGHUP, onSysSignal);
-    signal(SIGINT, onSysSignal);
-    signal(SIGTERM, onSysSignal);*/
+    try
+    {
 
     if (signal(SIGHUP, onSysSignal) == SIG_ERR)
-        printf("Can't catch SIGHUP\n");
+        fprintf(stderr, "Can't catch SIGHUP\n");
     if (signal(SIGINT, onSysSignal) == SIG_ERR)
-        printf("Can't catch SIGINT\n");
+        fprintf(stderr, "Can't catch SIGINT\n");
     if (signal(SIGTERM, onSysSignal) == SIG_ERR)
-        printf("Can't catch SIGTERM\n");
+        fprintf(stderr, "Can't catch SIGTERM\n");
 
     GtkApplication *app;
-    int status;
     Args args;
 
     args.argc = argc;
     args.argv = argv;
 
-    app = gtk_application_new ("org.gnome.mdroutercontrol", G_APPLICATION_NON_UNIQUE);
+    app = gtk_application_new("org.gnome.mdroutercontrol", G_APPLICATION_NON_UNIQUE);
     //bool v = TRUE;  // PROP_REGISTER_SESSION = 1 ?
     //gtk_application_set_property(G_APPLICATION(app), PROP_REGISTER_SESSION, &v, NULL);
-    g_signal_connect (app, "activate", G_CALLBACK(onAppInit), &args);
-    g_signal_connect (app, "shutdown", G_CALLBACK(onAppShutdown), &args);
+    g_signal_connect(app, "activate", G_CALLBACK(onAppInit), &args);
+    g_signal_connect(app, "shutdown", G_CALLBACK(onAppShutdown), &args);
     //g_signal_connect (app, "query-end", G_CALLBACK(onQueryEnd), NULL);  // signal 'query-end' is invalid for instance ... of type 'GtkApplication'
-    //printf("", app.reg)
 
-    status = g_application_run (G_APPLICATION (app), argc, argv);
+    status = g_application_run(G_APPLICATION(app), argc, argv);
     g_object_unref (app);
+
+    }
+    catch (std::exception& ex)
+    {
+       std::cerr << ex.what() << std::endl;
+    }
+    catch (...)
+    {
+       std::cerr << "Unknown exception." << std::endl;
+    }
 
     return status;
 }
