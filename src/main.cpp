@@ -1,3 +1,4 @@
+// 1.2.1
 // g++ `pkg-config --cflags gtk+-3.0` -o mdrctrl main.cpp `pkg-config --libs gtk+-3.0 webkit2gtk-4.0 gnome-keyring-1` -I/usr/include/webkitgtk-4.0 -I/usr/include/libsoup-2.4
 // The code is not exemplary. I know.
 #include <stdio.h>
@@ -360,6 +361,10 @@ void setTrayIcon(bool isConnected, const char* tooltip)
 
 gboolean httpPingLater(gpointer data)
 {
+    static bool active = FALSE;
+    if (active)  return FALSE;
+    active = TRUE;
+
     //printf("httpPingLater:   testAddr=%s\n", testAddr.data());
     bool ok = false;
     string tooltip = appTitle;
@@ -381,6 +386,8 @@ gboolean httpPingLater(gpointer data)
     }
 
     setTrayIcon(ok, tooltip.data());
+    
+    active = FALSE;
 
     return FALSE;
 }
@@ -394,9 +401,12 @@ static void trayIconMenu(GtkStatusIcon *status_icon, guint button, guint32 activ
 
 static void onTrayActivate(GtkStatusIcon *status_icon, gpointer user_data)
 {
-    static bool wait = false;
-    if (wait)  return;
-    wait = true;
+    static time_t prev_tt = 0;
+    time_t tt;
+    time(&tt);
+
+    if (tt - prev_tt <= 0)  return;
+    prev_tt = tt;
 
     if (winRouter->isActive())
     {
@@ -404,8 +414,6 @@ static void onTrayActivate(GtkStatusIcon *status_icon, gpointer user_data)
     }
     else
         onRouter();
-
-    wait = false;
 }
 
 int pingCountdown = 0;
@@ -626,7 +634,7 @@ void onQueryEnd(GtkApplication *app, gpointer data)
 
 int main(int argc, char **argv)
 {
-    printf("MD Router Control 1.1.4      14.06.2021\n");
+    printf("MD Router Control 1.2.1      27.02.2023\n");
     int status;
 
     try
