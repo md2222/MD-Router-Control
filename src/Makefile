@@ -12,13 +12,13 @@ LIBS    = `pkg-config --libs gtk+-3.0 webkit2gtk-4.0 libsecret-1`
 LIBS    += -I/usr/include/webkitgtk-4.0 
 LIBS    += -I/usr/include/libsoup-2.4
 
-TARGET  = mdrctrl2
+TARGET  = mdrctrl
 
 
 all:
-#	glib-compile-resources --generate-source resources.xml
+	glib-compile-resources --generate-source resources.xml
 #	g++ $(CFLAGS) $(INC) $(SOURCES) -o $(TARGET) $(LIBS)
 	gcc $(CFLAGS) $(INC) $(SOURCES) -o $(TARGET) $(LIBS)
 
 clean:
-			rm -rf mdrctrl2 *.o
+			rm -rf mdrctrl *.o
