@@ -531,6 +531,9 @@ static void onConfWin()
         return;
     }
     
+    if (appIcon)
+        gtk_window_set_icon (confWin->window, appIcon);
+
     // The user-provided signal handlers are called in the order they were connected in.
     g_signal_connect(confWin->window, "delete-event", G_CALLBACK(onConfWinClose), confWin);
 
@@ -648,7 +651,7 @@ typedef struct
 static void
 appActivate (GtkApplication *app, Args* args)
 {
-    g_print("MD Router Control 2.1.1      12.04.2025\n");
+    g_print("MD Router Control 2.1.2      14.04.2025\n");
 
     gchar *baseName = g_path_get_basename(args->argv[0]);
     gchar *configDir = g_get_user_config_dir();
