@@ -6,6 +6,7 @@
 #include <locale.h>
 #include <glib/gi18n.h>
 #include <gio/gio.h>
+#include <errno.h>
 #include <libsecret/secret.h>
 
 #include <sys/socket.h>
@@ -27,25 +28,27 @@ GKeyFile* confFile = 0;
 GtkStatusIcon *tray = 0;
 GdkPixbuf *pixConnected = 0;
 GdkPixbuf *pixDisconnected = 0;
+GdkPixbuf *pixTest = 0;
+int pingCountdown = 0;
 
 ConfigData confData = { 0, 0, 0, 0 };
 ConfigDialog* confWin = 0;
 GdkRectangle confWinRect = { 0, 0, 0, 0 };
 
-
-// free() after use
-char* currTimeStr()
+typedef enum
 {
-    //char sz[32];
-    int bufLen = 32;
-    char* sz = malloc(bufLen);
-    time_t tt;
-    struct tm lt;
-    time (&tt);
-    localtime_r(&tt, &lt);
-    strftime(sz, bufLen, "%Y-%m-%d %H:%M:%S", &lt);
-    return sz;
-}
+    None,
+    Connected,
+    Disconnected,  
+    Ping   
+} InetStatus;
+InetStatus currInetStatus = None;
+
+// httpPingLater mode
+enum PingMode { pmNone, pmMenu };
+int pipefd[2] = { 0, 0 };
+static int pingCount = 0;
+
 
 //----------------------------------------------------------------------------------------------------------------------
 // https://developer.gnome.org/gtk3/stable/GtkDialog.html#GtkDialogFlags
@@ -72,10 +75,6 @@ gint MessageBox(GtkWidget *parent, const char* text, const char* caption, uint t
    return result;
 }
 
-/*gint MessageBox(GtkWidget *parent, const char* text, const char* caption, uint type)
-{
-    return MessageBox(GtkWidget *parent, const char* text, const char* caption, uint type, NULL);
-}*/
 
 gboolean hideMessage (gpointer data)
 {
@@ -163,13 +162,12 @@ static void loadSettings(ConfigData* data)
 //----------------------------------------------------------------------------------------------------------------------
 
 const SecretSchema mdrctrl_secret_schema = {
-	"org.mdrctrl.passw",
-	SECRET_SCHEMA_DONT_MATCH_NAME,
-	{
-		{ "device", SECRET_SCHEMA_ATTRIBUTE_STRING },
-		//{ "simid", SECRET_SCHEMA_ATTRIBUTE_STRING },
-		{ "NULL", (SecretSchemaAttributeType)0 },
-	}
+    "org.mdrctrl.passw", SECRET_SCHEMA_NONE,
+    {
+        { "device", SECRET_SCHEMA_ATTRIBUTE_STRING },
+        //{ "simid", SECRET_SCHEMA_ATTRIBUTE_STRING },
+        { "NULL", (SecretSchemaAttributeType)0 },
+    }
 };
 
 
@@ -249,59 +247,85 @@ gchar* findPassw()
 
 //----------------------------------------------------------------------------------------------------------------------
 
-#define ICON_DISC 0
-#define ICON_CONN 1
-
-void setTrayIcon(int id, const char* tooltip)
+gchar* getInetStatusTooltip(InetStatus status)
 {
-    static int status = 0;
-    gchar* currTooltip = 0;
-    gboolean isConnected = id == ICON_CONN;
+    gchar* tooltip = 0;
 
-    if (!status || (status > 0) != isConnected)
-    {
-        status = isConnected ? 1 : -1;
+    if (status == Connected)
+        tooltip = g_strconcat(appName, "\nConnected", NULL);
+    else if (status == Disconnected)
+        tooltip = g_strconcat(appName, "\nNot connected\n", strerror(errno), NULL);
+    else 
+        tooltip = g_strconcat(appName, "\nTest connection\n", strerror(errno), NULL);
 
-        if (isConnected)
-        {
-            printf("setTrayIcon: Connected\n");
-            gtk_status_icon_set_from_pixbuf(tray, pixConnected);
-        }
-        else
-        {
-            printf("setTrayIcon: Disconnected\n");
-            gtk_status_icon_set_from_pixbuf(tray, pixDisconnected);
-        }
-    }
-
-    if (currTooltip != tooltip)
-    {
-        currTooltip = tooltip;
-        gtk_status_icon_set_tooltip_text(tray, tooltip);
-    }
+    return tooltip;
 }
 
 
-gboolean httpPing(const char* addr)
+void setTrayIcon(InetStatus status)
 {
-    if (!addr || !strlen(addr))  return FALSE;
+    static InetStatus prevStatus = None;
+    static gchar* prevTooltip = "";
+
+    if (status != prevStatus)
+    {
+        prevStatus = status;
+
+        if (status == Connected)
+        {
+            gtk_status_icon_set_from_pixbuf(tray, pixConnected);
+        }
+        else if (status == Disconnected)
+        {
+            gtk_status_icon_set_from_pixbuf(tray, pixDisconnected);
+        }
+        else 
+        {
+            gtk_status_icon_set_from_pixbuf(tray, pixTest);
+        }
+    }
+    
+    gchar* tooltip = getInetStatusTooltip(status);
+
+    if (prevTooltip != tooltip)
+    {
+        prevTooltip = tooltip;
+        gtk_status_icon_set_tooltip_text(tray, tooltip);
+    }
+
+    g_free(tooltip);
+}
+
+
+void httpPingThread(const char* addr)
+{
+    pid_t pid = fork();
+    if (pid != 0)  return;  // not child
+
+    close(pipefd[0]);
+
+    gboolean ok = FALSE;
+
+    if (!addr || !strlen(addr))  
+        goto end; 
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0)
     {
         fprintf(stderr, "Open socket error: %d: %s\n", errno, strerror(errno));
-        return FALSE;
+        goto end;
     }
     
     struct hostent *serv = gethostbyname(addr);
     if (serv == NULL)
     {
         fprintf(stderr, "gethostbyname error: %d: %s\n", h_errno, hstrerror(h_errno));
-        // EADDRNOTAVAIL	99	/* Cannot assign requested address */
-        // EHOSTDOWN	112	/* Host is down */
-        // EFAULT		14	/* Bad address */
+        // EADDRNOTAVAIL    99  /* Cannot assign requested address */
+        // EHOSTDOWN    112 /* Host is down */
+        // EFAULT       14  /* Bad address */
         errno = 99;
-        return FALSE;
+        //return FALSE;
+        goto end;
     }
 
     struct sockaddr_in saddr;
@@ -314,12 +338,9 @@ gboolean httpPing(const char* addr)
     int flags = fcntl(sock, F_GETFL, NULL);
     fcntl(sock, F_SETFL, flags|O_NONBLOCK);
 
-    gboolean ok = FALSE;
-
-    // ENETUNREACH	101	/* Network is unreachable */
+    // ENETUNREACH  101 /* Network is unreachable */
     // EINPROGRESS  115 /* Operation now in progress */
     int res = connect(sock, (struct sockaddr *)&saddr, sizeof(saddr));
-    //printf("Socket connect result: %d, errno=%d\n", res, errno);
 
     if (res < 0 && errno != EINPROGRESS)
     {
@@ -351,8 +372,8 @@ gboolean httpPing(const char* addr)
             int so_error;
             socklen_t len = sizeof so_error;
 
-            // ECONNREFUSED	111	/* Connection refused */ - refused by server?
-            // ENETUNREACH	101	/* Network is unreachable */
+            // ECONNREFUSED 111 /* Connection refused */ - refused by server?
+            // ENETUNREACH  101 /* Network is unreachable */
             getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
             fprintf(stderr, "Socket so_error: %d: %s\n", so_error, strerror(so_error));
 
@@ -375,58 +396,115 @@ gboolean httpPing(const char* addr)
     fcntl(sock, F_SETFL, flags);
     shutdown(sock, SHUT_RDWR);
     close(sock);
+    
+end:    
+    sleep(1);
 
-    return ok;
+    char x[2];  
+    x[0] = ok ? 'Y' : 'N'; 
+    write(pipefd[1], x, 1);
+
+    close(pipefd[1]);
+    
+    _exit(0);  
 }
 
-// httpPingLater mode
-#define PM_NONE 0
-#define PM_MENU 1
 
-void httpPingLater(int mode)
+static void onChildSignal(int signum)
 {
-    g_print("httpPingLater:   mode=%d    %s\n", mode, confData.testAddr);
-    static gboolean active = FALSE;
-    if (active)  return FALSE;
-    active = TRUE;
+    //g_print("onChildSignal\n");
+    
+    while(waitpid(-1, NULL, WNOHANG) > 0)
+        ;
+}
 
-    gboolean ok = FALSE;
-    gchar* tooltip;
 
-    // ok icon by default
+gboolean onGioIn(GIOChannel* channel, GIOCondition condition, gpointer mode)
+{
+    char buf[2];
+    gsize len = 0;
+    GError *err = NULL;
+    GIOStatus rv = g_io_channel_read_chars(channel, buf, 1, &len, &err);
+
+    if (err)
+    {
+        g_error ("onGioIn:    g_io_channel_read_chars error:  %s\n", err->message);
+        goto stop;
+    }
+    
+    if (len <= 0)
+        goto stop;
+    
+    if (buf[0] == 'Y')  currInetStatus = Connected;
+    else currInetStatus = Disconnected;
+
+    setTrayIcon(currInetStatus);
+
+    if (mode == pmMenu)
+    {
+        gchar* tooltip = getInetStatusTooltip(currInetStatus);
+        showMessage(tooltip, 5);
+        g_free(tooltip);
+    }
+
+stop:
+    err = NULL;
+    g_io_channel_shutdown(channel, FALSE, &err);
+    if (err)
+        g_error ("onGioIn:    g_io_channel_shutdown error:  %s\n", err->message);
+
+    pipefd[0] = 0;
+    
+    return FALSE;  // stop check
+}
+
+
+// The thread is because program freezes on ping sometimes
+// g_idle_add - If the function returns FALSE it will not be called again.
+gboolean httpPingLater(gpointer mode)
+{
+    //if (pingCount > 0)  return FALSE; 
+    if (pipefd[0] != 0)  return FALSE;
+
     if (!confData.testAddr || !strlen(confData.testAddr))
     {
-        ok = TRUE;
-        tooltip = g_strconcat(appName, "\nStatus unknown\nTest address is empty", NULL);
+        if (mode == pmMenu)
+        {
+            gchar* tooltip = g_strconcat(appName, "\nStatus unknown\nTest address is empty", NULL);
+            showMessage(tooltip, 5);
+            g_free(tooltip);
+        }
+
     }
     else
     {
-        ok = httpPing(confData.testAddr);
-
-        if (ok)
-            tooltip = g_strconcat(appName, "\nConnected", NULL);
-        else
-            tooltip = g_strconcat(appName, "\nNot connected\n", strerror(errno), NULL);
+        if (pipe2(pipefd, O_NONBLOCK) == -1) 
+        {
+            g_print("pipe error\n");
+        }
+        
+        currInetStatus = Ping;
+        setTrayIcon(currInetStatus);
+        
+        httpPingThread(confData.testAddr);
+        
+        close(pipefd[1]); 
+    
+        signal(SIGCHLD, onChildSignal);  // twice. no zombie
+        
+        GIOChannel* gio = g_io_channel_unix_new(pipefd[0]);
+        guint sid = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_NVAL | G_IO_ERR, onGioIn, mode);
     }
 
-    int iconId = ok ? ICON_CONN : ICON_DISC;
-    setTrayIcon(iconId, tooltip);
-    
-    if (mode == PM_MENU)
-        showMessage(tooltip, 5);
-
-    active = FALSE;
+    return FALSE;
 }
 //----------------------------------------------------------------------------------------------------------------------
-
-int pingCountdown = 0;
-
 
 static gint onPingTime(gpointer data)
 {
     if (--pingCountdown <= 0)
     {
-        httpPingLater(PM_NONE);
+        httpPingLater(pmNone);
         return FALSE;  // stop timer
     }
     
@@ -436,10 +514,11 @@ static gint onPingTime(gpointer data)
 
 static void setPingCountdown(int count)
 {
-    if (pingCountdown <= 0)
+    if (count > 0 && pingCountdown <= 0)
         g_timeout_add(1000, onPingTime, NULL);
 
-    pingCountdown = count;
+    if (count > pingCountdown)
+        pingCountdown = count;
 }
 
 
@@ -452,12 +531,20 @@ static void onNetworkChanged(GNetworkMonitor *monitor, gboolean available, gpoin
 
 static gboolean onWebWinClose(GtkWidget *win, GdkEventKey* event, gpointer data)
 {
-    gtk_window_get_position(win, &webWinRect.x, &webWinRect.y);
-    gtk_window_get_size(win, &webWinRect.width, &webWinRect.height);
+    GdkRectangle rect;
+    gtk_window_get_position(win, &rect.x, &rect.y);
+    gtk_window_get_size(win, &rect.width, &rect.height);
+   
+    if (!gdk_rectangle_equal(&rect, &webWinRect))
+    {
+        webWinRect = rect;
+        saveSettings(&confData);
+    }
 
     webWin = 0;
     
-    setPingCountdown(3);
+    //g_idle_add(httpPingLater, pmNone);
+    setPingCountdown(2);
 
     return FALSE;
 }
@@ -478,7 +565,6 @@ static void onWebWinOpen()
         webWindowSetRect(webWin, &webWinRect); 
 
     webWindowShow(webWin);
-    
     
     gchar* passw = findPassw();
     if (!passw)
@@ -512,11 +598,10 @@ static gboolean onConfWinClose(GtkWidget *win, GdkEvent *ev, ConfigDialog* dlg)
     return FALSE;
 }
 
-// example
+// for example
 void onConfWinOk()
 {
     //g_print("onConfWinOk:   \n");
-    ;
 }
 
 
@@ -553,7 +638,7 @@ static void onConfWin()
 
 static void onTestConn()
 {
-    g_idle_add(httpPingLater, PM_MENU);
+    g_idle_add(httpPingLater, pmMenu);
 }
 
 
@@ -615,6 +700,7 @@ static void onTrayActivate(GtkStatusIcon *status_icon, gpointer user_data)
     time_t tt;
     time(&tt);
 
+    // block fast clicks
     if (tt - prev_tt <= 0)  return;
     prev_tt = tt;
 
@@ -632,13 +718,10 @@ static void onTrayActivate(GtkStatusIcon *status_icon, gpointer user_data)
 }
 
 
-
 static void trayIconMenu(GtkStatusIcon *status_icon, guint button, guint32 activate_time, gpointer popupMenu)
 {
     gtk_menu_popup(GTK_MENU(popupMenu), NULL, NULL, gtk_status_icon_position_menu, status_icon, button, activate_time);
 }
-
-
 
 
 typedef struct 
@@ -651,7 +734,7 @@ typedef struct
 static void
 appActivate (GtkApplication *app, Args* args)
 {
-    g_print("MD Router Control 2.1.2      14.04.2025\n");
+    g_print("MD Router Control 2.2.8      16.05.2025\n");
 
     gchar *baseName = g_path_get_basename(args->argv[0]);
     gchar *configDir = g_get_user_config_dir();
@@ -660,16 +743,17 @@ appActivate (GtkApplication *app, Args* args)
 
     g_free(baseName);
     g_free(configDir);
-
+    
     g_autoptr(GError) err = NULL;
     appIcon = gdk_pixbuf_new_from_resource ("/app/icons/mdrctrl.png", &err);
     if (!appIcon && err)
         g_warning ("Load window icon error: %s\n", err->message);
         
-    pixConnected = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-2.png", NULL);
-    pixDisconnected  = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-1.png", NULL);
+    pixConnected = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-ok.png", NULL);
+    pixDisconnected  = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-not.png", NULL);
+    pixTest = gdk_pixbuf_new_from_resource("/app/icons/trayIcon-test.png", NULL);
 
-    tray = gtk_status_icon_new_from_pixbuf(pixDisconnected);
+    tray = gtk_status_icon_new_from_pixbuf(pixTest);
 
     GtkWidget *trayMenu = trayMenuNew(app);
 
@@ -684,9 +768,10 @@ appActivate (GtkApplication *app, Args* args)
     GNetworkMonitor *netMon = g_network_monitor_get_default();
     g_signal_connect(netMon, "network-changed", G_CALLBACK(onNetworkChanged), NULL);
 
-    g_idle_add(httpPingLater, PM_NONE);
+    //g_idle_add(httpPingLater, pmNone);
+    setPingCountdown(1);
 
-     gtk_main ();
+    gtk_main ();
 }
 
 
@@ -707,4 +792,3 @@ main (int argc, char **argv)
 
     return status;
 }
-

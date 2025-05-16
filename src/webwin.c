@@ -8,7 +8,7 @@ GdkRectangle defRect = { 200, 100, 1280, 900 };
 
 static gboolean onKeyPress(GtkWidget* win, GdkEventKey* event, gpointer user_data)
 {
-    g_print("onKeyPress:    %s\n", gdk_keyval_name(event->keyval));
+    //g_print("onKeyPress:    %s\n", gdk_keyval_name(event->keyval));
 
     if (event->keyval == GDK_KEY_Escape)
     {
@@ -30,8 +30,6 @@ GtkWindow *webWindowCreate(void)
 
     // Websites will not store any data in the client storage. This is normally used to implement private instances.
     WebKitWebContext *context = webkit_web_context_new_ephemeral();
-    // This process model is indicated for applications which may use a number of web views
-    // ... for example a full-fledged web browser with support for multiple tabs.
 
     GtkWidget *web = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(context));
 
